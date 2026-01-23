@@ -1,0 +1,4 @@
+This is my first RAG document.
+RAG stands for Retrieval Augmented Generation.
+It allows an AI chatbot to answer questions using documents.
+This project is built using Python, LangChain, FAISS, and Hugging Face.
