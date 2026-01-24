@@ -1,12 +1,13 @@
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
+from transformers import pipeline
 
-# Load embeddings
+# 1️⃣ Load embeddings (same as build_index.py)
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
 
-# Load FAISS index
+# 2️⃣ Load FAISS index
 vector_store = FAISS.load_local(
     "faiss_index",
     embeddings,
@@ -15,15 +16,37 @@ vector_store = FAISS.load_local(
 
 print("✅ FAISS index loaded successfully!")
 
-# Create retriever
-retriever = vector_store.as_retriever()
+# 3️⃣ Create retriever
+retriever = vector_store.as_retriever(search_kwargs={"k": 2})
 
-# User query
+# 4️⃣ Load local LLM (Flan-T5)
+llm = pipeline(
+    "text2text-generation",
+    model="google/flan-t5-small",
+    max_length=200
+)
+
+# 5️⃣ Ask question
 query = "What is RAG?"
 
-# NEW API usage
 docs = retriever.invoke(query)
 
-print("\n🔎 Retrieved Documents:\n")
-for i, doc in enumerate(docs, start=1):
-    print(f"{i}. {doc.page_content}")
+context = "\n".join([doc.page_content for doc in docs])
+
+prompt = f"""
+Answer the question using the context below.
+
+Context:
+{context}
+
+Question:
+{query}
+
+Answer:
+"""
+
+# 6️⃣ Generate answer
+response = llm(prompt)
+
+print("\n🤖 Answer:")
+print(response[0]["generated_text"])
