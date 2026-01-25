@@ -1,8 +1,10 @@
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.llms import HuggingFacePipeline
+
 from transformers import pipeline
 
-# 1️⃣ Load embeddings (same as build_index.py)
+# 1️⃣ Load embeddings
 embeddings = HuggingFaceEmbeddings(
     model_name="sentence-transformers/all-MiniLM-L6-v2"
 )
@@ -14,24 +16,30 @@ vector_store = FAISS.load_local(
     allow_dangerous_deserialization=True
 )
 
-print("✅ FAISS index loaded successfully!")
+print("✅ FAISS index loaded")
 
 # 3️⃣ Create retriever
-retriever = vector_store.as_retriever(search_kwargs={"k": 2})
+retriever = vector_store.as_retriever(search_kwargs={"k": 3})
 
-# 4️⃣ Load local LLM (Flan-T5)
-llm = pipeline(
+# 4️⃣ Load small LLM (CPU friendly)
+pipe = pipeline(
     "text2text-generation",
     model="google/flan-t5-small",
-    max_length=200
+    max_new_tokens=200
 )
 
-# 5️⃣ Ask question
-query = "What is RAG?"
+llm = HuggingFacePipeline(pipeline=pipe)
 
+# 5️⃣ Ask a question
+query = "What is robotics?"
 docs = retriever.invoke(query)
 
-context = "\n".join([doc.page_content for doc in docs])
+print("\n🔎 Retrieved Context:\n")
+for i, d in enumerate(docs, 1):
+    print(f"{i}. {d.page_content[:300]}...\n")
+
+# 6️⃣ Generate answer
+context = "\n".join([d.page_content for d in docs])
 
 prompt = f"""
 Answer the question using the context below.
@@ -45,8 +53,7 @@ Question:
 Answer:
 """
 
-# 6️⃣ Generate answer
-response = llm(prompt)
+response = llm.invoke(prompt)
 
-print("\n🤖 Answer:")
-print(response[0]["generated_text"])
+print("\n🤖 Final Answer:\n")
+print(response)
