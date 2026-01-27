@@ -1,59 +1,68 @@
-from langchain_community.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.llms import HuggingFacePipeline
+# app.py
+import streamlit as st
+import requests
 
-from transformers import pipeline
+API_URL = "http://127.0.0.1:8050"
 
-# 1️⃣ Load embeddings
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+st.set_page_config(page_title="Website RAG Chatbot", page_icon="🤖", layout="wide")
 
-# 2️⃣ Load FAISS index
-vector_store = FAISS.load_local(
-    "faiss_index",
-    embeddings,
-    allow_dangerous_deserialization=True
-)
+st.title("🌐 Website Ingestion RAG Chatbot")
+st.write("Paste a website URL, ingest it, then ask questions!")
 
-print("✅ FAISS index loaded")
+# ----- Session State -----
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-# 3️⃣ Create retriever
-retriever = vector_store.as_retriever(search_kwargs={"k": 3})
+# ----- Step 1: Website Ingestion -----
+st.subheader("1️⃣ Ingest Website")
+url = st.text_input("Enter Website URL", placeholder="https://en.wikipedia.org/wiki/Artificial_intelligence")
 
-# 4️⃣ Load small LLM (CPU friendly)
-pipe = pipeline(
-    "text2text-generation",
-    model="google/flan-t5-small",
-    max_new_tokens=200
-)
+if st.button("🚀 Ingest Website"):
+    if not url:
+        st.warning("Please enter a URL!")
+    else:
+        with st.spinner("Ingesting website..."):
+            try:
+                response = requests.post(f"{API_URL}/ingest/website", json={"url": url}, timeout=60)
+                if response.status_code == 200:
+                    st.success("✅ Website ingested successfully!")
+                    st.text_area("Preview of Content", value=response.json().get("text_preview", ""), height=200)
+                else:
+                    st.error(f"❌ Failed: {response.text}")
+            except requests.exceptions.ConnectionError:
+                st.error("🚫 Backend not running. Start FastAPI first.")
+            except Exception as e:
+                st.error(f"Error: {e}")
 
-llm = HuggingFacePipeline(pipeline=pipe)
+st.divider()
 
-# 5️⃣ Ask a question
-query = "What is robotics?"
-docs = retriever.invoke(query)
+# ----- Step 2: Ask Questions -----
+st.subheader("2️⃣ Ask Questions from Website")
+question = st.text_input("Your Question", placeholder="What is Artificial Intelligence?")
 
-print("\n🔎 Retrieved Context:\n")
-for i, d in enumerate(docs, 1):
-    print(f"{i}. {d.page_content[:300]}...\n")
+if st.button("💬 Ask Question"):
+    if not question:
+        st.warning("Please type a question!")
+    else:
+        with st.spinner("Generating answer..."):
+            try:
+                response = requests.post(f"{API_URL}/ask", json={"question": question}, timeout=60)
+                if response.status_code == 200:
+                    answer = response.json()["answer"]
+                    context_preview = response.json()["retrieved_context"]
 
-# 6️⃣ Generate answer
-context = "\n".join([d.page_content for d in docs])
+                    # Save in chat history
+                    st.session_state.chat_history.append({"question": question, "answer": answer})
 
-prompt = f"""
-Answer the question using the context below.
+                    # Display chat history
+                    for chat in reversed(st.session_state.chat_history):
+                        st.markdown(f"**Q:** {chat['question']}")
+                        st.markdown(f"**A:** {chat['answer']}\n---")
 
-Context:
-{context}
-
-Question:
-{query}
-
-Answer:
-"""
-
-response = llm.invoke(prompt)
-
-print("\n🤖 Final Answer:\n")
-print(response)
+                    st.expander("📄 Retrieved Context Preview").write(context_preview)
+                else:
+                    st.error(f"❌ Failed: {response.text}")
+            except requests.exceptions.ConnectionError:
+                st.error("🚫 Backend not running. Start FastAPI first.")
+            except Exception as e:
+                st.error(f"Error: {e}")
