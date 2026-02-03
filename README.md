@@ -78,6 +78,6 @@ This project allows users to:
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/your-username/rag-chatbot.git
+git clone https://github.com/Hareini/rag-chatbot.git
 cd rag-chatbot
 
